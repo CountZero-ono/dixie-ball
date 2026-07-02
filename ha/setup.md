@@ -87,6 +87,21 @@ Settings → Voice Assistants → Dixie (your agent)
 
 ---
 
+## 8. Split-Audio (Redirect Voice to High-Quality Speakers)
+
+If you find the Ball's built-in speaker tinny or mediocre, you can split the input and output in Home Assistant:
+
+1. Create a Home Assistant Automation:
+   * **Trigger**: State of `select.dixie_ball_pipeline` or Assist Pipeline events.
+   * **Action**: Alternatively, just target your external speakers directly inside the Assist pipeline.
+2. In Assist Pipeline settings, or via ESPHome configurations, you can redirect the audio:
+   * Go to **Settings → Devices & Services → ESPHome → Dixie Ball**.
+   * Click **Configure**.
+   * Turn **OFF** the "Use speaker for voice assistant" toggle if you want the voice assistant's response to output entirely to a different HA media player.
+   * Create an automation that triggers when the pipeline runs, sending the TTS response to your high-quality media player (e.g. `media_player.desk_speakers` or `media_player.ser7_output`).
+
+---
+
 ## Verify Qwen3.6 is reachable from HA host
 
 ```bash
