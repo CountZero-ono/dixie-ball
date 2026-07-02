@@ -57,8 +57,8 @@ Local voice assistant on a round ESP32-S3 display. Zero cloud. Dixie speaks.
         ▼
 [Beelink SER7 — Flatline Stack @ 192.168.1.112]
   llama-qwen-mtp.service  → port 1235 (Qwen3.6 35B A3B Q3_K_M, MTP, ~30 tok/s)
-  wyoming-whisper.service → port 10300 (to install)
-  wyoming-piper.service   → port 10200 (to install)
+  wyoming-whisper.service → port 10300 (running)
+  wyoming-piper.service   → port 10200 (running)
   MemMachine @ 192.168.1.53:8080
   Qdrant     @ 192.168.1.44:6333
 ```
@@ -79,11 +79,11 @@ Local voice assistant on a round ESP32-S3 display. Zero cloud. Dixie speaks.
 - [x] HA confirmed running at `http://homeassistant.local`
 - [x] SER7 IP confirmed: `192.168.1.112`
 - [x] AUR packages identified — no pip venv needed
+- [x] Run `yay -S piper-tts python-wyoming-faster-whisper python-wyoming-piper` on SER7
+- [x] Download voice model: `wyoming-piper --download en_US-ryan-medium`
+- [x] Deploy + enable systemd services on SER7
 
 ### To Do
-- [ ] Run `yay -S piper-tts python-wyoming-faster-whisper python-wyoming-piper` on SER7
-- [ ] Download voice model: `wyoming-piper --download en_US-ryan-medium`
-- [ ] Deploy + enable systemd services on SER7
 - [ ] ESPHome: clone xiaozhi-esphome, fill `secrets.yaml`, flash via USB (`/dev/ttyACM0`)
 - [ ] HA: Add Wyoming integration (Whisper @ :10300, Piper @ :10200)
 - [ ] HA: Install "Local OpenAI LLM" via HACS, point to `http://192.168.1.112:1235/v1`
