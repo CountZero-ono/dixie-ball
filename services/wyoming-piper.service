@@ -1,0 +1,22 @@
+[Unit]
+Description=Wyoming Piper (TTS for Dixie Ball)
+After=network.target
+
+[Service]
+# Installed via: yay -S piper-tts python-wyoming-piper
+# Download voice: wyoming-piper --download en_US-lessac-medium
+ExecStart=/usr/bin/wyoming-piper \
+    --uri tcp://0.0.0.0:10200 \
+    --piper /usr/bin/piper-tts \
+    --data-dir /home/fuad/.local/share/piper-tts \
+    --download-dir /home/fuad/.local/share/piper-tts \
+    --voice en_US-lessac-medium \
+    --speaker 0 \
+    --samples-per-chunk 1024
+Restart=always
+RestartSec=5
+User=fuad
+Environment=PYTHONUNBUFFERED=1
+
+[Install]
+WantedBy=multi-user.target

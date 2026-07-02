@@ -1,0 +1,152 @@
+## Spotpear Ball V2 — ESPHome config for Flatline/Dixie
+## Hardware confirmed: ESP32-S3 QFN56, 16MB flash, 8MB OPI PSRAM, ES8311 codec
+## Based on xiaozhi-esphome Modular v1.12 (requires ESPHome 2026.4.0+)
+##
+## FLASH INSTRUCTIONS:
+##   1. Clone https://github.com/RealDeco/xiaozhi-esphome
+##   2. Copy this file into: devices/Under_Development/Modular/
+##   3. Copy secrets.yaml into the same directory
+##   4. Run: esphome run dixie_ball.yaml
+##
+## The modular system uses !include to pull in core.yaml, display_pages.yaml,
+## clocks-standard.yaml, and HW/ball_v2_hw.yaml from the cloned repo.
+## Do NOT run this file standalone — it must live alongside those files.
+
+substitutions:
+  name: dixie-ball
+  friendly_name: "Dixie"
+
+  ## ── DISPLAY ──────────────────────────────────────────────────────────────
+  imagewidth:   "240"
+  imageheight:  "240"
+  screenwidth:  "240"
+  screenheight: "240"
+  rotate_display: "0"
+
+  ## ── CHARACTER ────────────────────────────────────────────────────────────
+  ## Options: Alfred, Jarvis, GLaDOS, Salem, Hacker, Cybergirl, Astrobot …
+  ## Full list in upstream Ball_v2.yaml comments.
+  imagemodel: "Alfred"
+  imagepath: "https://github.com/RealDeco/xiaozhi-esphome/raw/main/images"
+
+  ## ── AUDIO ────────────────────────────────────────────────────────────────
+  startup_sound: "Home_Connected"
+  startup_sound_file: "https://github.com/RealDeco/xiaozhi-esphome/raw/main/sounds/ready.flac"
+
+  ## ── WIFI (from secrets.yaml) ─────────────────────────────────────────────
+  wifi_ssid:     !secret wifi_ssid
+  wifi_password: !secret wifi_password
+
+  ## ── PRESENCE SENSORS (set to none if not using) ──────────────────────────
+  ## These are required substitution vars — leave as-is or wire to real entities
+  sensor1_entity: "binary_sensor.none"
+  light1_entity:  "light.none"
+  sensor1_label:  "Room 1"
+  sensor2_entity: "binary_sensor.none"
+  light2_entity:  "light.none"
+  sensor2_label:  "Room 2"
+  sensor3_entity: "binary_sensor.none"
+  light3_entity:  "light.none"
+  sensor3_label:  "Room 3"
+  sensor4_entity: "binary_sensor.none"
+  light4_entity:  "light.none"
+  sensor4_label:  "Room 4"
+
+## ── MODULAR PACKAGES ─────────────────────────────────────────────────────────
+## These paths are relative — this file must live in the Modular/ directory
+packages:
+  hw:            !include HW/ball_v2_hw.yaml
+  core:          !include core.yaml
+  display_pages: !include display_pages.yaml
+  clocks:        !include clocks-standard.yaml
+
+## ── ESPHOME ──────────────────────────────────────────────────────────────────
+esphome:
+  name: ${name}
+  friendly_name: ${friendly_name}
+  name_add_mac_suffix: false
+  min_version: "2026.4.0"
+  platformio_options:
+    board_build.flash_mode: dio
+    board_upload.maximum_size: 16777216   # 16MB flash
+
+## ── ESP32 PLATFORM ───────────────────────────────────────────────────────────
+esp32:
+  board: esp32-s3-devkitc-1
+  variant: esp32s3
+  flash_size: 16MB
+  framework:
+    type: esp-idf
+    version: recommended
+    sdkconfig_options:
+      CONFIG_ESP32S3_DATA_CACHE_64KB:      "y"
+      CONFIG_ESP32S3_DATA_CACHE_LINE_64B:  "y"
+      CONFIG_SPIRAM_FETCH_INSTRUCTIONS:    "y"
+      CONFIG_SPIRAM_RODATA:                "y"
+
+## ── PSRAM ─────────────────────────────────────────────────────────────────────
+## OPI PSRAM confirmed by flash-id: Embedded PSRAM 8MB (AP_3v3)
+psram:
+  mode: octal
+  speed: 80MHz
+
+## ── WIFI ──────────────────────────────────────────────────────────────────────
+wifi:
+  ssid:     ${wifi_ssid}
+  password: ${wifi_password}
+  ap:
+    ssid: "Dixie-Setup"
+    password: "flatline1"
+
+captive_portal:
+
+## ── API (Home Assistant) ──────────────────────────────────────────────────────
+api:
+  encryption:
+    key: !secret api_encryption_key
+
+## ── OTA ───────────────────────────────────────────────────────────────────────
+ota:
+  - platform: esphome
+
+## ── LOGGER ────────────────────────────────────────────────────────────────────
+logger:
+  level: INFO
+
+## ── WAKE WORD ─────────────────────────────────────────────────────────────────
+## Runs entirely on ESP32-S3 — no server round-trip until wake word detected.
+## "okay_nabu" is built-in and requires no extra files.
+## To use "hey_jarvis": model: hey_jarvis
+## To use a custom .tflite: model: URL_TO_YOUR_MODEL
+micro_wake_word:
+  models:
+    - model: okay_nabu
+  on_wake_word_detected:
+    - voice_assistant.start:
+
+## ── VOICE ASSISTANT ───────────────────────────────────────────────────────────
+## Wyoming protocol → Home Assistant Assist Pipeline "Dixie"
+## Pipeline: Whisper STT (SER7:10300) → Qwen3.6 (SER7:1235) → Piper TTS (SER7:10200)
+voice_assistant:
+  microphone: box_mic          # defined in HW/ball_v2_hw.yaml
+  media_player: external_media_player  # defined in HW/ball_v2_hw.yaml
+  use_wake_word: true
+  noise_suppression_level: 2
+  auto_gain: 31dBFS
+  volume_multiplier: 4.0
+  on_listening:
+    - display.page.show: listening_page
+    - component.update: round_display
+  on_stt_end:
+    - display.page.show: thinking_page
+    - component.update: round_display
+  on_tts_start:
+    - display.page.show: speaking_page
+    - component.update: round_display
+  on_end:
+    - delay: 100ms
+    - display.page.show: main_page
+    - component.update: round_display
+  on_error:
+    - display.page.show: main_page
+    - component.update: round_display

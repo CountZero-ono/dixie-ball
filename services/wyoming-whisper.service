@@ -1,0 +1,20 @@
+[Unit]
+Description=Wyoming Faster Whisper (STT for Dixie Ball)
+After=network.target
+
+[Service]
+# Installed via: yay -S python-wyoming-faster-whisper
+ExecStart=/usr/bin/wyoming-faster-whisper \
+    --uri tcp://0.0.0.0:10300 \
+    --model base \
+    --language en \
+    --device cpu \
+    --beam-size 1 \
+    --compute-type int8
+Restart=always
+RestartSec=5
+User=fuad
+Environment=PYTHONUNBUFFERED=1
+
+[Install]
+WantedBy=multi-user.target
