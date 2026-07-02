@@ -17,6 +17,7 @@ Restart=always
 RestartSec=5
 User=fuad
 Environment=PYTHONUNBUFFERED=1
+Environment=PYTHONPATH=/usr/lib/piper-tts/lib/python3.14/site-packages
 
 [Install]
 WantedBy=multi-user.target
