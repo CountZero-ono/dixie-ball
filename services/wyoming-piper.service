@@ -7,7 +7,6 @@ After=network.target
 # Download voice: wyoming-piper --download en_US-ryan-medium
 ExecStart=/usr/bin/wyoming-piper \
     --uri tcp://0.0.0.0:10200 \
-    --piper /usr/bin/piper-tts \
     --data-dir /home/fuad/.local/share/piper-tts \
     --download-dir /home/fuad/.local/share/piper-tts \
     --voice en_US-ryan-medium \

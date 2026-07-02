@@ -10,7 +10,9 @@ ExecStart=/usr/bin/wyoming-faster-whisper \
     --language en \
     --device cpu \
     --beam-size 1 \
-    --compute-type int8
+    --compute-type int8 \
+    --data-dir /home/fuad/.local/share/wyoming-whisper \
+    --download-dir /home/fuad/.local/share/wyoming-whisper
 Restart=always
 RestartSec=5
 User=fuad
