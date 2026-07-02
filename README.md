@@ -82,7 +82,7 @@ Local voice assistant on a round ESP32-S3 display. Zero cloud. Dixie speaks.
 
 ### To Do
 - [ ] Run `yay -S piper-tts python-wyoming-faster-whisper python-wyoming-piper` on SER7
-- [ ] Download voice model: `wyoming-piper --download en_US-lessac-medium`
+- [ ] Download voice model: `wyoming-piper --download en_US-ryan-medium`
 - [ ] Deploy + enable systemd services on SER7
 - [ ] ESPHome: clone xiaozhi-esphome, fill `secrets.yaml`, flash via USB (`/dev/ttyACM0`)
 - [ ] HA: Add Wyoming integration (Whisper @ :10300, Piper @ :10200)
@@ -99,8 +99,8 @@ Local voice assistant on a round ESP32-S3 display. Zero cloud. Dixie speaks.
 # 1. Install Wyoming + Piper via AUR (Garuda Linux)
 yay -S piper-tts python-wyoming-faster-whisper python-wyoming-piper
 
-# 2. Download voice model
-wyoming-piper --download en_US-lessac-medium \
+# 2. Download voice model (e.g. en_US-ryan-medium or en_GB-alan-medium)
+wyoming-piper --download en_US-ryan-medium \
   --data-dir ~/.local/share/piper-tts \
   --download-dir ~/.local/share/piper-tts
 
