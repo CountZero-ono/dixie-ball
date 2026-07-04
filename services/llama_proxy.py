@@ -42,39 +42,7 @@ def chat_completions():
         user_msg = data['messages'][-1].get('content', '').strip()
         print(f"User: {user_msg}")
 
-    # NATIVE PROXY INTERCEPTION FOR DICTATION
-    import re
-    lower_msg = user_msg.lower()
-    match = re.search(r'(?:^|dixie[,.]?\s+)(?:type|tap|dictate)[,.]?\s+(.*?)(?:\s+(?:in|into|to|on)\s+([a-zA-Z0-9_ -]+))?[.!?]*$', lower_msg)
-    
-    if match:
-        print(">>> NATIVE DICTATION INTERCEPTION <<<")
-        # Extract using the same regex but on the original string to preserve case
-        orig_match = re.search(r'(?:^|dixie[,.]?\s+)(?:type|tap|dictate)[,.]?\s+(.*?)(?:\s+(?:in|into|to|on)\s+([a-zA-Z0-9_ -]+))?[.!?]*$', user_msg, re.IGNORECASE)
-        
-        if orig_match:
-            text_to_type = orig_match.group(1).strip()
-            target_app = orig_match.group(2).strip() if orig_match.group(2) else ""
-            
-            print(f"Typing text: '{text_to_type}' into app: '{target_app}'")
-            
-            cmd = ""
-            if target_app:
-                # Remove punctuation from target app
-                target_app = re.sub(r'[.!?]$', '', target_app)
-                cmd += f"hyprctl dispatch focuswindow \"{target_app}\" && sleep 0.2 && "
-            
-            safe_text = text_to_type.replace('"', '\\"')
-            cmd += f"wtype \"{safe_text}\""
-            
-            subprocess.run(cmd, shell=True, capture_output=True)
-            
-            fake_message = {"role": "assistant", "content": "Done."}
-            if data.get('stream', False):
-                return Response(stream_with_context(generate_fake_stream(fake_message)), content_type='text/event-stream')
-            else:
-                resp_json = {"choices": [{"finish_reason": "stop", "index": 0, "message": fake_message}]}
-                return Response(json.dumps(resp_json), status=200, content_type='application/json')
+
     if 'tools' in data:
         data['tools'].extend([
             {
@@ -228,11 +196,23 @@ def chat_completions():
             else:
                 return Response(final_resp.text, status=final_resp.status_code, headers=dict(final_resp.headers))
 
+    # INTERCEPT FOR PC SPEAKERS (edge-tts)
+    content_to_speak = message.get('content', '').strip()
+    if content_to_speak:
+        print(f"Playing TTS locally on PC: {content_to_speak[:50]}...")
+        safe_content = content_to_speak.replace('"', '\\"')
+        # Run edge-tts in the background so it doesn't block the HTTP response
+        subprocess.Popen(f'edge-tts --voice en-US-ChristopherNeural --text "{safe_content}" | mpv -', shell=True)
+        # Change the text sent back to the ball so the ball stays silent!
+        message['content'] = "."
+
     # If no SER7 tool was called, return the response normally
     if original_stream:
         return Response(stream_with_context(generate_fake_stream(message)), content_type='text/event-stream')
     else:
-        return Response(resp.text, status=resp.status_code, headers=dict(resp.headers))
+        # Re-encode the modified message
+        resp_json['choices'][0]['message'] = message
+        return Response(json.dumps(resp_json), status=resp.status_code, headers=dict(resp.headers))
 
 # Forward all other endpoints (like /v1/models) transparently
 @app.route('/<path:path>', methods=['GET', 'POST', 'PUT', 'DELETE'])
