@@ -1,161 +1,64 @@
 # Dixie Ball
 
-**Xiaozhi Spotpear Ball V2 → Flatline voice terminal**
+**Xiaozhi Spotpear Ball V2 → Voice Terminal for SER7**
 
-Local voice assistant on a round ESP32-S3 display. Zero cloud. Dixie speaks.
-
----
-
-## Hardware — confirmed 2026-07-02
-
-| Item | Value |
-|------|-------|
-| Device | Spotpear Ball V2 (touch + battery variant) |
-| Chip | ESP32-S3 QFN56 rev 0.2 |
-| Flash | 16MB |
-| PSRAM | 8MB OPI (octal, AP_3v3) |
-| USB | USB-Serial/JTAG (native, no adapter needed) |
-| Display | GC9A01A 240×240 round, SPI |
-| Audio codec | ES8311 (I2C) |
-| Mic | I2S digital mic via ES8311 |
-| Speaker | I2S via ES8311, enable pin GPIO46 |
-| MAC | b8:1f:3f:ac:0e:64 |
-
-### Pinout (confirmed from ball_v2_hw.yaml)
-
-| Signal | GPIO |
-|--------|------|
-| SPI CLK | 4 |
-| SPI MOSI | 2 |
-| I2S LR | 45 |
-| I2S BCLK | 9 |
-| I2S MCLK | 16 |
-| I2S DIN (mic) | 10 |
-| I2S DOUT (spk) | 8 |
-| Speaker enable | 46 |
-| I2C SDA (codec) | 15 |
-| I2C SCL (codec) | 14 |
+A completely customized, local AI voice terminal built on a Spotpear ESP32-S3 round display. Zero cloud. Lightning-fast response times.
 
 ---
 
 ## Architecture
 
 ```
-[Dixie Ball — ESP32-S3]
-  microWakeWord → "okay_nabu" (on-device, no server needed)
-  GC9A01A display → state animations (idle / listening / thinking / speaking)
-  Wyoming voice assistant component
+[Dixie Ball (ESP32-S3)]
+  microWakeWord → "okay_nabu" (On-device)
+  Wyoming Voice Assistant Component
         │
-        │ Wyoming protocol (LAN)
+        │ Wyoming Protocol
         ▼
-[Home Assistant — http://homeassistant.local]
-  Assist Pipeline "Dixie":
+[Home Assistant (VM)]
+  Assist Pipeline "Dixie Proxy":
   STT  → Wyoming Whisper  @ SER7 192.168.1.112:10300
-  LLM  → OpenAI-compat    @ SER7 192.168.1.112:1235  (Qwen3.6 35B MTP)
+  LLM  → Llama Proxy      @ SER7 192.168.1.112:1238 (Intercepts dictation & thinking)
   TTS  → Wyoming Piper    @ SER7 192.168.1.112:10200
         │
+        │
         ▼
-[Beelink SER7 — Flatline Stack @ 192.168.1.112]
-  llama-qwen-mtp.service  → port 1235 (Qwen3.6 35B A3B Q3_K_M, MTP, ~30 tok/s)
-  wyoming-whisper.service → port 10300 (running)
-  wyoming-piper.service   → port 10200 (running)
-  MemMachine @ 192.168.1.53:8080
-  Qdrant     @ 192.168.1.44:6333
+[Llama Proxy — llama_proxy.py @ SER7 Host]
+  1. Intercepts dictation ("type", "tap") → natively injects keystrokes via wtype/hyprctl
+  2. Disables Qwen "thinking" blocks (`enable_thinking: false`) for fast voice responses
+  3. Injects SER7 bash execution tools into the Qwen prompt
+        │
+        ▼
+[Qwen3.6 35B MTP @ SER7 Host :1235]
+  Generates responses, runs bash scripts, or delegates back to Home Assistant for smart home control.
 ```
 
 ---
 
 ## Status
 
-### Done
-- [x] Hardware identified — Spotpear Ball V2, MAC b8:1f:3f:ac:0e:64
-- [x] Pinout confirmed from upstream `ball_v2_hw.yaml`
-- [x] ESPHome YAML written → `esphome/dixie_ball.yaml`
-- [x] Secrets template → `esphome/secrets.yaml`
-- [x] Wyoming Whisper systemd service → `services/wyoming-whisper.service`
-- [x] Wyoming Piper systemd service → `services/wyoming-piper.service`
-- [x] HA setup guide → `ha/setup.md`
-- [x] Flatline bridge design notes → `notes/flatline_bridge.md`
-- [x] HA confirmed running at `http://homeassistant.local`
-- [x] SER7 IP confirmed: `192.168.1.112`
-- [x] AUR packages identified — no pip venv needed
-- [x] Run `yay -S piper-tts python-wyoming-faster-whisper python-wyoming-piper` on SER7
-- [x] Download voice model: `wyoming-piper --download en_US-ryan-medium`
-- [x] Deploy + enable systemd services on SER7
+### Accomplished Today (July 3rd/4th)
+- [x] Flashed ESPHome firmware successfully via `/dev/ttyACM0`!
+- [x] Fixed Qwen's "thinking" latency by writing `llama_proxy.py` to strip out `<think>` block generation.
+- [x] Disabled massive HA prompt context injection to bring inference latency down from 12s to 3s.
+- [x] Injected `run_ser7_command` tool into the proxy to give the ball **native shell execution** on the SER7 host.
+- [x] Implemented **native proxy dictation**! The proxy intercepts commands starting with "type" or "tap" and uses `wtype` + `hyprctl` to instantly inject text into Wayland windows (bypassing the 35B model entirely).
+- [x] Device is fully running on battery and Wi-Fi!
 
-### To Do
-- [ ] ESPHome: clone xiaozhi-esphome, fill `secrets.yaml`, flash via USB (`/dev/ttyACM0`)
-- [ ] HA: Add Wyoming integration (Whisper @ :10300, Piper @ :10200)
-- [ ] HA: Install "Local OpenAI LLM" via HACS, point to `http://192.168.1.112:1235/v1`
-- [ ] HA: Create Assist Pipeline "Dixie" (STT + Qwen3.6 + TTS)
-- [ ] HA: Adopt ball device, assign pipeline
-- [ ] Test wake word end-to-end
+### To Do (Next Session)
+- [ ] **UI Overhaul:** The current interface of the ball is "very ugly". We need to redesign and completely change the display graphics/animations.
+- [ ] Tune Qwen's system prompt further if needed.
+- [ ] Set up more advanced OpenCode/Antigravity automation routines.
 
 ---
 
-## SER7 Install (next session)
+## Proxy Details (`llama_proxy.py`)
 
-```bash
-# 1. Install Wyoming + Piper via AUR (Garuda Linux)
-yay -S piper-tts python-wyoming-faster-whisper python-wyoming-piper
+The heart of this system is the Python proxy running on the SER7 host at port `1238`. It acts as a man-in-the-middle between Home Assistant and `llama-server`.
 
-# 2. Download voice model (e.g. en_US-ryan-medium or en_GB-alan-medium)
-wyoming-piper --download en_US-ryan-medium \
-  --data-dir ~/.local/share/piper-tts \
-  --download-dir ~/.local/share/piper-tts
+1. **Instant Dictation Interception**: If the STT transcript starts with "type", "tap", or "dictate", the proxy parses the text and the target app, uses `hyprctl` to focus the window, and `wtype` to physically inject the keystrokes. It then returns a fake "Done." response to Home Assistant instantly.
+2. **Bash Injection**: It gives Qwen a `run_ser7_command` tool. If Qwen calls it, the proxy executes the shell command safely on the host and feeds the output back into the prompt.
+3. **Thinking Stripper**: It sets `enable_thinking=false` in the `chat_template_kwargs` to ensure Qwen doesn't spend 20 seconds "thinking" before speaking.
 
-# 3. Deploy systemd services
-sudo cp ~/OCProjects/dixie-ball/services/wyoming-whisper.service /etc/systemd/system/
-sudo cp ~/OCProjects/dixie-ball/services/wyoming-piper.service /etc/systemd/system/
-sudo systemctl daemon-reload
-sudo systemctl enable --now wyoming-whisper wyoming-piper
-
-# 4. Verify
-ss -tlnp | grep -E '10200|10300'
-```
-
-## ESPHome Flash (next session)
-
-```bash
-# 1. Install ESPHome
-python3 -m venv ~/.venv/esphome && source ~/.venv/esphome/bin/activate
-pip install esphome
-
-# 2. Clone upstream modular configs
-git clone https://github.com/RealDeco/xiaozhi-esphome.git ~/OCProjects/xiaozhi-esphome
-
-# 3. Copy our config into the Modular directory
-cp ~/OCProjects/dixie-ball/esphome/dixie_ball.yaml \
-   ~/OCProjects/xiaozhi-esphome/devices/Under_Development/Modular/
-
-# 4. Fill in secrets (wifi_ssid, wifi_password, api_encryption_key)
-nano ~/OCProjects/xiaozhi-esphome/devices/Under_Development/Modular/secrets.yaml
-
-# 5. Flash (device on /dev/ttyACM0)
-cd ~/OCProjects/xiaozhi-esphome/devices/Under_Development/Modular/
-esphome run dixie_ball.yaml --device /dev/ttyACM0
-```
-
----
-
-## Files
-
-| File | Purpose |
-|------|---------|
-| `esphome/dixie_ball.yaml` | ESPHome device config — flash this |
-| `esphome/secrets.yaml` | Wi-Fi + API key template (gitignored) |
-| `services/wyoming-whisper.service` | systemd unit for Whisper STT on SER7 |
-| `services/wyoming-piper.service` | systemd unit for Piper TTS on SER7 |
-| `ha/setup.md` | Home Assistant wiring guide |
-| `notes/flatline_bridge.md` | Future: voice → Flatline MCP integration |
-
----
-
-## References
-
-- Upstream ESPHome configs: https://github.com/RealDeco/xiaozhi-esphome
-- Ball V2 hardware ref: `devices/Under_Development/Modular/HW/ball_v2_hw.yaml`
-- Ball V2 main config: `devices/Under_Development/Modular/Ball_v2.yaml`
-- Wyoming Whisper AUR: `python-wyoming-faster-whisper` (3.1.0)
-- Wyoming Piper AUR: `python-wyoming-piper` (2.2.2)
-- Piper TTS AUR: `piper-tts` (1.4.2)
+*To restart proxy:*
+`systemctl --user restart llama-qwen-proxy.service`
