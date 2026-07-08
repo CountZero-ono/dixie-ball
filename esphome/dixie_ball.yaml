@@ -33,7 +33,7 @@ substitutions:
   ## ── CHARACTER ────────────────────────────────────────────────────────────
   ## Options: Alfred, Jarvis, GLaDOS, Salem, Hacker, Cybergirl, Astrobot …
   ## Full list in upstream Ball_v2.yaml comments.
-  imagemodel: "Alfred"
+  imagemodel: "Jarvis"
   imagepath: "https://github.com/RealDeco/xiaozhi-esphome/raw/main/images"
 
   ## ── AUDIO ────────────────────────────────────────────────────────────────
@@ -136,6 +136,6 @@ logger:
 micro_wake_word:
   id: mww
   models:
-    - model: okay_nabu
+    - model: hey_jarvis
 
 

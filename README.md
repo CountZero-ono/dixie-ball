@@ -27,7 +27,8 @@ A completely customized, local AI voice terminal built on a Spotpear ESP32-S3 ro
 Because Home Assistant's voice pipelines enforce strict silence limits (2 seconds) and maximum timeouts (30 seconds), this project relies on **split responsibilities**:
 
 1. **The Dixie Ball (Smart Assistant & Q&A)**: Used for conversational queries and smart home control. The ball listens, `llama_proxy.py` proxies the request to Qwen, but then it intercepts the text response, uses `edge-tts` to speak the answer dynamically through the host PC's speakers, and sends a blank "mute" packet back to the Ball.
-2. **The F4 Hotkey (Uninterrupted Dictation)**: A dedicated `dictate.py` script running on the host PC (Hyprland Wayland). Pressing F4 starts a `pw-record` session directly from the PC microphone (e.g., A4tech webcam). Pressing F4 again stops the recording, streams it straight to the local `wyoming-faster-whisper` server on port `10300`, and uses `wtype` to type it instantly. Zero timeouts.
+2. **The F4 Hotkey (Uninterrupted Dictation)**: A dedicated dictation workflow (recording from the PC microphone and using Whisper to type into the active window). *Note: This has been split into its own repository at `/home/fuad/OCProjects/dictation` (configured with `dictate.py` and `services/dixie_dictate.py`).*
+
 
 ---
 
