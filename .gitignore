@@ -1,0 +1,3 @@
+.gitignore
+esphome/secrets.yaml
+whisper-data/

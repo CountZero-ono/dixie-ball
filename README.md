@@ -22,12 +22,14 @@ A completely customized, local AI voice terminal built on a Spotpear ESP32-S3 ro
   TTS  → edge-tts (Intercepted by Llama Proxy to play on PC speakers) / Wyoming Piper
 ```
 
-### The Dual-Role Setup
+### The Dual-Role Device
 
-Because Home Assistant's voice pipelines enforce strict silence limits (2 seconds) and maximum timeouts (30 seconds), this project relies on **split responsibilities**:
+The Dixie Ball operates as a true dual-role device:
 
-1. **The Dixie Ball (Smart Assistant & Q&A)**: Used for conversational queries and smart home control. The ball listens, `llama_proxy.py` proxies the request to Qwen, but then it intercepts the text response, uses `edge-tts` to speak the answer dynamically through the host PC's speakers, and sends a blank "mute" packet back to the Ball.
-2. **The F4 Hotkey (Uninterrupted Dictation)**: A dedicated dictation workflow (recording from the PC microphone and using Whisper to type into the active window). *Note: This has been split into its own repository at `/home/fuad/OCProjects/dictation` (configured with `dictate.py` and `services/dixie_dictate.py`).*
+1. **Voice Terminal for Dixie (Qwen 3.6 35b)**: A powerful, local conversational assistant for Q&A. The ball listens, `llama_proxy.py` proxies the request to Qwen, intercepts the text response, and uses `edge-tts` to speak the answer dynamically through the host PC's speakers (sending a blank "mute" packet back to the Ball).
+2. **Command Terminal for Home Assistant**: Controls the smart home directly via voice commands.
+
+(Note: Because Home Assistant's voice pipelines enforce strict silence limits of 2 seconds and maximum timeouts of 30 seconds, this project relies on custom proxying to bypass these limitations for long conversational answers.)
 
 
 ---
@@ -41,7 +43,6 @@ Because Home Assistant's voice pipelines enforce strict silence limits (2 second
 - [x] Injected `run_ser7_command` tool into the proxy to give the ball **native shell execution** on the SER7 host.
 - [x] **Whisper Multilingual Overhaul:** Upgraded to `medium-int8`, patched `dispatch_handler.py` to strip Home Assistant's forced English overrides, and injected an `--initial-prompt` containing Latin, Cyrillic, and English characters to fix a massive bug where Azeri was being transcribed in the Persian alphabet!
 - [x] **TTS Speaker Routing:** Upgraded `llama_proxy.py` to generate `edge-tts` audio (Christopher voice) on the host PC speakers instead of the tiny Ball speaker.
-- [x] **Native Dictation Script:** Created `dictate.py` mapped to F4 with `notify-send` visual feedback.
 - [x] Device is fully running on battery and Wi-Fi!
 
 ### To Do (Next Session)

@@ -58,24 +58,9 @@ def chat_completions():
                         "required": ["command"]
                     }
                 }
-            },
-            {
-                "type": "function",
-                "function": {
-                    "name": "type_text_on_screen",
-                    "description": "Simulates a physical keyboard to type text on the screen. Use this when the user asks you to type, tap, or dictate text.",
-                    "parameters": {
-                        "type": "object",
-                        "properties": {
-                            "text": {"type": "string", "description": "The exact text to type"},
-                            "target_app": {"type": "string", "description": "Optional application name to focus before typing (e.g. 'code', 'firefox'). Leave empty if not specified."}
-                        },
-                        "required": ["text"]
-                    }
-                }
             }
         ])
-        print("Injected 'run_ser7_command' and 'type_text_on_screen' tools into prompt.")
+        print("Injected 'run_ser7_command' tool into prompt.")
 
     # Force enable_thinking to false
     if 'chat_template_kwargs' not in data:
@@ -111,13 +96,9 @@ def chat_completions():
     # INTERCEPT OUR SER7 TOOLS
     if message.get('tool_calls'):
         ser7_tool_tc = None
-        type_tool_tc = None
         for tc in message['tool_calls']:
             if tc.get('function', {}).get('name') == 'run_ser7_command':
                 ser7_tool_tc = tc
-                break
-            elif tc.get('function', {}).get('name') == 'type_text_on_screen':
-                type_tool_tc = tc
                 break
                 
         if ser7_tool_tc:
@@ -156,45 +137,6 @@ def chat_completions():
             else:
                 return Response(final_resp.text, status=final_resp.status_code, headers=dict(final_resp.headers))
 
-        elif type_tool_tc:
-            print(f"\n>>> INTERCEPTED TYPE TEXT ON SCREEN <<<")
-            try:
-                args = json.loads(type_tool_tc['function']['arguments'])
-                text = args.get('text', '')
-                target_app = args.get('target_app', '')
-                
-                print(f"Typing text: '{text}' into app: '{target_app}'")
-                
-                cmd = ""
-                if target_app:
-                    cmd += f"hyprctl dispatch focuswindow \"{target_app}\" && sleep 0.2 && "
-                
-                # Escape quotes properly for bash
-                safe_text = text.replace('"', '\\"')
-                cmd += f"wtype \"{safe_text}\""
-                
-                subprocess.run(cmd, shell=True, capture_output=True, text=True, timeout=10)
-                output = "Text typed successfully."
-            except Exception as e:
-                output = f"Error typing text: {str(e)}"
-                print(output)
-            
-            data['messages'].append(message)
-            data['messages'].append({
-                "role": "tool",
-                "tool_call_id": type_tool_tc['id'],
-                "name": "type_text_on_screen",
-                "content": output
-            })
-            
-            print("Sending tool output back to Qwen for final answer...")
-            final_resp = make_request(data)
-            final_message = final_resp.json().get('choices', [{}])[0].get('message', {})
-            
-            if original_stream:
-                return Response(stream_with_context(generate_fake_stream(final_message)), content_type='text/event-stream')
-            else:
-                return Response(final_resp.text, status=final_resp.status_code, headers=dict(final_resp.headers))
 
     # INTERCEPT FOR PC SPEAKERS (edge-tts)
     content_to_speak = message.get('content', '').strip()
