@@ -1,3 +1,10 @@
 .gitignore
 esphome/secrets.yaml
 whisper-data/
+graphify-out/
+*.jsonl
+.pio/
+desktop-avatar/.pio/
+desktop-avatar/include/config.h
+__pycache__/
+*.pyc
