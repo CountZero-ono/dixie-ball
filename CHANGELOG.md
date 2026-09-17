@@ -12,6 +12,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
   - Desktop URL opening (`open_url` via `xdg-open` / Floorp / Chromium).
   - Native Obsidian note launching (`open_obsidian_note` via `obsidian://open`).
   - Interactive Kitty terminal spawning (`spawn_terminal`).
+  - Active window and desktop screenshot capture (`capture_screen` via `grim` + `hyprctl`).
   - Whitelisted homelab script execution (`run_homelab_script` for `negatiff_invert`, `zg_index`, `flatline_deck`).
   - Real-time hardware and port telemetry probe (`check_workstation_telemetry`).
   - Direct PostgreSQL 16 / Qdrant Flatline memory query (`query_flatline_memory`).

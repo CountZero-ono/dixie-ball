@@ -100,6 +100,20 @@ GEMINI_TOOL_DECLARATIONS = [
         }
     },
     {
+        "name": "capture_screen",
+        "description": "Capture a visual snapshot of the user's desktop or currently focused Hyprland window on the SER7 workstation for visual reasoning, debugging, error inspection, or UI layout analysis.",
+        "parameters": {
+            "type": "OBJECT",
+            "properties": {
+                "target": {
+                    "type": "STRING",
+                    "enum": ["focused_window", "fullscreen"],
+                    "description": "Capture scope: 'focused_window' (active application window, default) or 'fullscreen' (entire desktop display)."
+                }
+            }
+        }
+    },
+    {
         "name": "run_homelab_script",
         "description": "Execute an approved script or automation task on the workstation from the curated whitelist.",
         "parameters": {
@@ -267,6 +281,39 @@ def spawn_terminal(command: str, title: str = "Dixie Terminal") -> Dict[str, Any
         }
     except Exception as e:
         logger.error(f"Failed to spawn terminal: {e}")
+        return {"status": "error", "error": str(e)}
+
+
+def capture_screen(target: str = "focused_window") -> Dict[str, Any]:
+    """Captures the active Hyprland window or fullscreen desktop using grim and hyprctl."""
+    snap_path = "/tmp/dixie_snap.jpg"
+    try:
+        if target == "focused_window":
+            active_proc = subprocess.run(
+                ["hyprctl", "activewindow", "-j"],
+                capture_output=True, text=True, check=True
+            )
+            active_win = json.loads(active_proc.stdout)
+            at = active_win.get("at", [0, 0])
+            size = active_win.get("size", [1920, 1080])
+            geometry = f"{at[0]},{at[1]} {size[0]}x{size[1]}"
+            cmd = ["grim", "-g", geometry, snap_path]
+        else:
+            cmd = ["grim", snap_path]
+
+        subprocess.run(cmd, capture_output=True, text=True, check=True)
+        file_size = os.path.getsize(snap_path)
+        logger.info(f"Screen captured ({target}) to {snap_path} ({file_size} bytes)")
+        return {
+            "status": "success",
+            "action": "capture_screen",
+            "target": target,
+            "image_path": snap_path,
+            "file_size": file_size,
+            "message": f"Successfully captured {target} to {snap_path}. Image ready for vision analysis."
+        }
+    except Exception as e:
+        logger.error(f"Failed to capture screen ({target}): {e}")
         return {"status": "error", "error": str(e)}
 
 
@@ -461,6 +508,7 @@ TOOL_MAPPING = {
     "open_url": open_url,
     "open_obsidian_note": open_obsidian_note,
     "spawn_terminal": spawn_terminal,
+    "capture_screen": capture_screen,
     "run_homelab_script": run_homelab_script,
     "check_workstation_telemetry": check_workstation_telemetry,
     "query_flatline_memory": query_flatline_memory,
