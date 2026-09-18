@@ -6,6 +6,7 @@ for Hyprland desktop control, script execution, Flatline memory, and agent fleet
 
 import os
 import sys
+import re
 import json
 import logging
 import urllib.parse
@@ -209,8 +210,10 @@ GEMINI_TOOL_DECLARATIONS = [
 def switch_workspace(workspace_num: int) -> Dict[str, Any]:
     """Switches active Hyprland workspace via hyprctl."""
     try:
+        if not isinstance(workspace_num, int) or workspace_num < 1 or workspace_num > 100:
+            return {"status": "error", "error": "Invalid workspace number (must be 1-100)"}
         cmd = ["hyprctl", "dispatch", "workspace", str(workspace_num)]
-        res = subprocess.run(cmd, capture_output=True, text=True, check=True)
+        res = subprocess.run(cmd, capture_output=True, text=True, check=True, timeout=3.0)
         logger.info(f"Switched to Hyprland workspace {workspace_num}")
         return {
             "status": "success",
@@ -224,8 +227,12 @@ def switch_workspace(workspace_num: int) -> Dict[str, Any]:
 
 
 def open_url(url: str, browser: str = "default") -> Dict[str, Any]:
-    """Opens a URL using xdg-open or a specific browser."""
+    """Opens a URL using xdg-open or a specific browser safely."""
     try:
+        parsed = urllib.parse.urlparse(url)
+        if parsed.scheme not in ("http", "https"):
+            return {"status": "error", "error": f"Invalid URL scheme '{parsed.scheme}'. Only http and https are permitted."}
+
         if browser == "floorp":
             cmd = ["floorp", url]
         elif browser == "chromium":
@@ -247,11 +254,14 @@ def open_url(url: str, browser: str = "default") -> Dict[str, Any]:
 
 
 def open_obsidian_note(vault_path: str) -> Dict[str, Any]:
-    """Opens an Obsidian note via the native obsidian:// URI scheme."""
+    """Opens an Obsidian note via the native obsidian:// URI scheme with path traversal protection."""
     try:
-        # Strip leading slashes if any
-        clean_path = vault_path.lstrip("/")
-        encoded_file = urllib.parse.quote(clean_path)
+        # Strip leading slashes and canonicalize path
+        clean_path = os.path.normpath(vault_path.lstrip("/"))
+        if clean_path.startswith("..") or "/../" in clean_path:
+            return {"status": "error", "error": "Path traversal attempt detected in vault_path"}
+
+        encoded_file = urllib.parse.quote(clean_path, safe="/")
         uri = f"obsidian://open?vault=Obsidian%20Vaults&file={encoded_file}"
         
         subprocess.Popen(["xdg-open", uri], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
@@ -268,8 +278,12 @@ def open_obsidian_note(vault_path: str) -> Dict[str, Any]:
 
 
 def spawn_terminal(command: str, title: str = "Dixie Terminal") -> Dict[str, Any]:
-    """Launches Kitty terminal running the requested command."""
+    """Launches Kitty terminal running the requested command safely."""
     try:
+        # Block dangerous shell subshells, expansions, and command chaining
+        if re.search(r'[\x00\r\n`$()<>;&|]', command):
+            return {"status": "error", "error": "Command contains unsafe shell metacharacters"}
+
         cmd = ["kitty", "--title", title, "bash", "-c", f"{command}; echo ''; read -p 'Press Enter to close...'"]
         subprocess.Popen(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
         logger.info(f"Spawned terminal '{title}' with command: {command}")
@@ -286,12 +300,13 @@ def spawn_terminal(command: str, title: str = "Dixie Terminal") -> Dict[str, Any
 
 def capture_screen(target: str = "focused_window") -> Dict[str, Any]:
     """Captures the active Hyprland window or fullscreen desktop using grim and hyprctl."""
-    snap_path = "/tmp/dixie_snap.jpg"
+    timestamp_ms = int(datetime.now().timestamp() * 1000)
+    snap_path = f"/tmp/dixie_snap_{timestamp_ms}.jpg"
     try:
         if target == "focused_window":
             active_proc = subprocess.run(
                 ["hyprctl", "activewindow", "-j"],
-                capture_output=True, text=True, check=True
+                capture_output=True, text=True, check=True, timeout=3.0
             )
             active_win = json.loads(active_proc.stdout)
             at = active_win.get("at", [0, 0])
@@ -301,7 +316,10 @@ def capture_screen(target: str = "focused_window") -> Dict[str, Any]:
         else:
             cmd = ["grim", snap_path]
 
-        subprocess.run(cmd, capture_output=True, text=True, check=True)
+        subprocess.run(cmd, capture_output=True, text=True, check=True, timeout=5.0)
+        if not os.path.isfile(snap_path):
+            return {"status": "error", "error": f"Screenshot file was not created at {snap_path}"}
+
         file_size = os.path.getsize(snap_path)
         logger.info(f"Screen captured ({target}) to {snap_path} ({file_size} bytes)")
         return {
@@ -327,8 +345,14 @@ def run_homelab_script(script_id: str, args: Optional[List[str]] = None) -> Dict
         }
 
     script_path = SCRIPT_WHITELIST[script_id]
+    if not os.path.isfile(script_path):
+        return {"status": "error", "error": f"Script binary '{script_path}' does not exist on disk"}
+
     args = args or []
-    full_cmd = [script_path] + args
+    if script_path.endswith(".py"):
+        full_cmd = [sys.executable, script_path] + args
+    else:
+        full_cmd = [script_path] + args
 
     try:
         logger.info(f"Executing whitelisted script: {full_cmd}")
@@ -415,24 +439,28 @@ def query_flatline_memory(query: str, layer: str = "all") -> Dict[str, Any]:
     # Check L1 PostgreSQL via psycopg or fallback
     try:
         import psycopg
-        db_url = "postgresql://flatline:flatline_password@192.168.1.53:5432/flatline"
-        with psycopg.connect(db_url, connect_timeout=3) as conn:
-            with conn.cursor() as cur:
-                cur.execute(
-                    "SELECT observation, category, created_at FROM observations "
-                    "WHERE observation ILIKE %s ORDER BY created_at DESC LIMIT 3;",
-                    (f"%{query}%",)
-                )
-                rows = cur.fetchall()
-                for r in rows:
-                    results["findings"].append({
-                        "tier": "L1-Postgres",
-                        "text": r[0],
-                        "category": r[1],
-                        "date": str(r[2])
-                    })
+        db_url = os.environ.get("FLATLINE_DB_URL")
+        if not db_url:
+            results["findings"].append({"tier": "L1-Postgres", "error": "FLATLINE_DB_URL environment variable is not configured."})
+        else:
+            with psycopg.connect(db_url, connect_timeout=3) as conn:
+                with conn.cursor() as cur:
+                    cur.execute(
+                        "SELECT observation, category, created_at FROM observations "
+                        "WHERE observation ILIKE %s ORDER BY created_at DESC LIMIT 3;",
+                        (f"%{query}%",)
+                    )
+                    rows = cur.fetchall()
+                    for r in rows:
+                        results["findings"].append({
+                            "tier": "L1-Postgres",
+                            "text": r[0],
+                            "category": r[1],
+                            "date": str(r[2])
+                        })
     except Exception as e:
-        results["findings"].append({"tier": "L1-Postgres", "error": f"DB query error: {e}"})
+        logger.error(f"Flatline L1 DB query failure: {type(e).__name__}")
+        results["findings"].append({"tier": "L1-Postgres", "error": "Database query failed"})
 
     return {
         "status": "success" if results["findings"] else "not_found",
@@ -446,13 +474,15 @@ def stash_agent_backlog(title: str, tasks: List[str], context: str = "") -> Dict
         os.makedirs(AGENT_BACKLOG_DIR, exist_ok=True)
         now = datetime.now()
         slug = "".join(c if c.isalnum() else "-" for c in title.lower()).strip("-")[:40]
-        filename = f"Task-{now.strftime('%Y%m%d-%H%M%S')}-{slug}.md"
+        micro_suffix = now.strftime('%f')[:4]
+        filename = f"Task-{now.strftime('%Y%m%d-%H%M%S')}-{micro_suffix}-{slug}.md"
         filepath = os.path.join(AGENT_BACKLOG_DIR, filename)
 
+        safe_title = title.replace('"', '\\"')
         task_lines = "\n".join(f"- [ ] {t}" for t in tasks)
 
         content = f"""---
-title: "{title}"
+title: "{safe_title}"
 date_created: "{now.strftime('%Y-%m-%d %H:%M:%S')}"
 status: pending
 tags:
@@ -523,7 +553,7 @@ def execute_tool(tool_name: str, args: Dict[str, Any]) -> Dict[str, Any]:
         logger.warning(f"Unknown tool requested: {tool_name}")
         return {"status": "error", "error": f"Tool '{tool_name}' not implemented in desktop_tools."}
 
-    logger.info(f"Executing tool '{tool_name}' with args: {args}")
+    logger.info(f"Executing tool '{tool_name}' with {len(args)} argument(s)")
     try:
         return handler(**args)
     except TypeError as te:
